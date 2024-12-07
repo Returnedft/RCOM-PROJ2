@@ -127,38 +127,40 @@ int requestResource(int sockfd, char *resource) {
 int getResource(const int sockfd, const int sockfd2, char *filename) {
     FILE *fd = fopen(filename, "wb");
     if (fd == NULL) {
-        printf("Error opening or creating file '%s'\n", filename);
-        exit(-1);
-    }
-
-    char msg[LENGTH];
-    int bytes;
-    
-    // Receive file data from the data connection
-    do {
-        bytes = read(sockfd2, msg, LENGTH);
-        if (bytes > 0) {
-            fwrite(msg, bytes, 1, fd);  // Write to file
-        } else if (bytes == 0) {
-            // End of data transfer
-            break;
-        } else {
-            perror("Error reading from data connection");
-            fclose(fd);
-            return -1;
-        }
-    } while (bytes > 0);
-
-    fclose(fd);
-
-    // Check for proper completion of file transfer
-    if (message(sockfd, msg) != 226) {
-        printf("Error transferring file '%s'\n", filename);
+        perror("Error opening or creating file");
         return -1;
     }
 
-    return 0; // Success
+    char buffer[LENGTH];
+    int bytes;
+    while ((bytes = read(sockfd2, buffer, LENGTH)) > 0) {
+        if (fwrite(buffer, 1, bytes, fd) != bytes) {
+            perror("Error writing to file");
+            fclose(fd);
+            close(sockfd2);
+            return -1;
+        }
+    }
+
+    if (bytes < 0) {
+        perror("Error reading from data connection");
+        fclose(fd);
+        close(sockfd2);
+        return -1;
+    }
+
+    fclose(fd);
+    close(sockfd2);  // Ensure the data socket is closed here
+
+    char msg[LENGTH];
+    if (message(sockfd, msg) != 226) {
+        fprintf(stderr, "Error completing transfer: %s\n", msg);
+        return -1;
+    }
+
+    return 226; // Success
 }
+
 
 
 
