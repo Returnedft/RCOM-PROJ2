@@ -8,7 +8,7 @@ int parse_url(char *unparsedUrl, struct URL *url) {
 
     regcomp(&expression, "@", 0);
     if (regexec(&expression, unparsedUrl, 0, NULL, 0) != 0) { //anonymous mode
-        
+
         sscanf(unparsedUrl, "%*[^/]//%[^/]", url->host);
         strcpy(url->user, "anonymous");
         strcpy(url->password, "password");
@@ -39,7 +39,7 @@ int message(int socket, char *msg) {
     char byte;
     int index = 0;
     int responseCode = 0;
-    int multiline = 0; 
+    int multiline = 0;
     char lineBuffer[LENGTH];
     memset(msg, 0, LENGTH);
     memset(lineBuffer, 0, LENGTH);
@@ -50,15 +50,15 @@ int message(int socket, char *msg) {
             exit(-1);
         }
 
-        if (byte == '\n') { 
+        if (byte == '\n') {
             lineBuffer[index] = '\0'; 
             index = 0;
 
             if (strlen(msg) == 0) {
-               
+
                 sscanf(lineBuffer, "%d", &responseCode);
                 if (lineBuffer[3] == '-') {
-                    multiline = 1; 
+                    multiline = 1;
                 }
             }
 
@@ -66,11 +66,11 @@ int message(int socket, char *msg) {
             strcat(msg, "\n");
 
             if (!multiline || (strncmp(lineBuffer, msg, 3) == 0 && lineBuffer[3] != '-')) {
-                break; 
+                break;
             }
 
         } else {
-            
+
             if (index < LENGTH - 1) {
                 lineBuffer[index++] = byte;
             } else {
@@ -84,25 +84,22 @@ int message(int socket, char *msg) {
     return responseCode;
 }
 
-
-
 int initializeSocket(char *ip, int port) {
 
     int sockfd;
     struct sockaddr_in server_addr;
 
-    /*server address handling*/
     bzero((char *) &server_addr, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr(ip);    /*32 bit Internet address network byte ordered*/
-    server_addr.sin_port = htons(port);        /*server TCP port must be network byte ordered */
+    server_addr.sin_addr.s_addr = inet_addr(ip);
+    server_addr.sin_port = htons(port);
 
-    /*open a TCP socket*/
+    // open a TCP socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket()");
         exit(-1);
     }
-    /*connect to the server*/
+    // connect to the server
     if (connect(sockfd,
                 (struct sockaddr *) &server_addr,
                 sizeof(server_addr)) < 0) {
@@ -113,18 +110,19 @@ int initializeSocket(char *ip, int port) {
     return sockfd;
 }
 
-int requestResource(int sockfd, char *resource) {
+int requestFile(int sockfd, char *filename) {
 
-    char fileCommand[5 + strlen(resource) + 2], answer[LENGTH];
+    char fileCommand[7 + strlen(filename)];
+    char answer[LENGTH];
 
-    sprintf(fileCommand, "retr %s\r\n", resource);
+    sprintf(fileCommand, "retr %s\r\n", filename);
 
-    write(sockfd, fileCommand, strlen(fileCommand));  
+    write(sockfd, fileCommand, strlen(fileCommand));
 
     return message(sockfd, answer);
 }
 
-int getResource(const int sockfd, const int sockfd2, char *filename) {
+int getFile(const int sockfd, const int sockfd2, char *filename) {
     FILE *fd = fopen(filename, "wb");
     if (fd == NULL) {
         perror("Error opening or creating file");
@@ -150,7 +148,7 @@ int getResource(const int sockfd, const int sockfd2, char *filename) {
     }
 
     fclose(fd);
-    close(sockfd2);  // Ensure the data socket is closed here
+    close(sockfd2);
 
     char msg[LENGTH];
     if (message(sockfd, msg) != 226) {
@@ -158,11 +156,8 @@ int getResource(const int sockfd, const int sockfd2, char *filename) {
         return -1;
     }
 
-    return 226; // Success
+    return 226;
 }
-
-
-
 
 int closeSockets(int sockfd, int sockfd2) {
     char answer[LENGTH];
@@ -172,18 +167,14 @@ int closeSockets(int sockfd, int sockfd2) {
         return -1;
     }
     close(sockfd);
-    close(sockfd2);  // Close both the control and data connections
+    close(sockfd2);
     return 0;
 }
-
-
-
 
 int enterPassiveMode(int sockfd, char *ip, int *port) {
     char msg[LENGTH];
     int ip1, ip2, ip3, ip4, port1, port2;
 
-    // Send the PASV command to the server
     const char *pasvCommand = "pasv\r\n";
     if (write(sockfd, pasvCommand, strlen(pasvCommand)) < 0) {
         perror("Failed to send PASV command");
@@ -201,19 +192,19 @@ int enterPassiveMode(int sockfd, char *ip, int *port) {
     }
 
     sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
-    *port = port1*256 + port2; 
+    *port = port1*256 + port2;
 
     printf("Entering passive mode. Server IP: %s, Port: %d\n", ip, *port);
 
     return 227;
 }
 
-int loginCmd(int sockfd ,char *user, char* pass){
+int loginCmd(int sockfd ,char *user, char* password){
 
     char msg[LENGTH];
 
     char userCommand[6+strlen(user)];
-    char passCommand[6+strlen(pass)];
+    char passwordCommand[6+strlen(password)];
 
     sprintf(userCommand, "user %s\r\n", user);
     write(sockfd, userCommand, strlen(userCommand));
@@ -221,12 +212,11 @@ int loginCmd(int sockfd ,char *user, char* pass){
         exit(-1);
     }
 
-    sprintf(passCommand, "pass %s\r\n", pass);
-    write(sockfd, passCommand, strlen(passCommand));
+    sprintf(passwordCommand, "pass %s\r\n", password);
+    write(sockfd, passwordCommand, strlen(passwordCommand));
 
     return message(sockfd,msg);
 }
-
 
 int main(int argc, char *argv[]) {
 
@@ -273,13 +263,13 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    int requestResponse = requestResource(sockfd, url.resource);
+    int requestResponse = requestFile(sockfd, url.resource);
     if (requestResponse != 150 && requestResponse != 125) {
         printf("Unknown resouce '%s' in '%s:%d'\n", url.resource, ip, port);
-        exit(-1);                                                                       
+        exit(-1);
     }
 
-    if (getResource(sockfd, sockfd2, url.file) != 226) {
+    if (getFile(sockfd, sockfd2, url.file) != 226) {
         printf("Error transfering file '%s' from '%s:%d'\n", url.file, ip, port);
         exit(-1);
     }
@@ -289,9 +279,6 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-
-
     return 0;
-
 
 }
